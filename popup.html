@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head> 
+</head> 
+<body>
+    <div class="header">
+        <h1>Coursera Downloader</h1>
+        <p>Easily download the courses youâ€™re enrolled in</p>
+    </div>
+    
+    <div class="info-section">
+        <h3>Quick Start:</h3>
+        <ol>
+            <li>Open any course page: <code>coursera.org/learn/[course-id]</code></li>
+            <li>Click the download Manager shown on the left corner of page</li>
+            <li>Keep view 100% in order to properly see and choose options</li>
+            <li>Only enrolled courses can be downloaded</li>
+            <li>Failed downloads needs a retry <strong>Manually</strong></li>
+        </ol>
+    </div>
+    
+    <div class="toggle-container">
+        <span class="toggle-label">Download Button</span>
+        <div class="tooltip">
+            <div class="toggle-switch" id="toggleSwitch">
+                <div class="slider"></div>
+            </div>
+            <span class="tooltip-text">Enable or hide the download button on course pages</span>
+        </div>
+    </div>
+    
+    <div class="demo-container">
+        <div class="tooltip">
+            <button class="demo-button-small" id="demoButton">Test Download</button>
+            <span class="tooltip-text">Downloads a sample file from our server (for testing only)</span>
+        </div>
+    </div>
+    
+    <div class="status" id="status">Checking status...</div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
