@@ -1,238 +1,359 @@
-(function() {
-    'use strict';
+// ============================================================================
+// CONTENT.JS - Minimal Course Downloader Button
+// ============================================================================
 
-    let isButtonVisible = false;
-    let isDownloading = false;
-    let downloadContainer = null;
+let downloadButton = null;
+let isDownloading = false;
+let currentSlug = null;
 
-    function extractSlug() {
-        const match = window.location.pathname.match(/\/learn\/([^\/]+)/);
-        return match ? match[1] : null;
-    }
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
-    function createDownloadUI() {
-        const container = document.createElement('div');
-        container.id = 'coursera-downloader';
-        container.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 77px;
-            background: #fff;
-            border: 2px solid #0056d3;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 999999;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 12px;
-            transition: all 0.3s ease;
-            display: none;
-        `;
+function extractSlugFromURL() {
+  const match = window.location.href.match(/coursera\.org\/learn\/([^\/\?#]+)/);
+  return match ? match[1] : null;
+}
 
-        container.innerHTML = `
-            <div id="download-form">
-                <select id="resolution-select" style="width: 100%; margin-bottom: 8px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-                    <option value="720p" selected>720p</option>
-                    <option value="1080p">1080p</option>
-                    <option value="480p">480p</option>
-                </select>
-                <label style="display: flex; align-items: center; margin-bottom: 8px; font-size: 11px;">
-                    <input type="checkbox" id="force-assets" checked style="margin-right: 4px;">
-                    Force Assets
-                </label>
-                <button id="download-btn" style="width: 100%; padding: 6px; background: #0056d3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                    Download Now
-                </button>
-            </div>
-            <div id="progress-section" style="display: none; margin-top: 8px;">
-                <div id="progress-bar" style="width: 100%; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
-                    <div id="progress-fill" style="height: 100%; background: #0056d3; width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-                <div id="progress-text" style="text-align: center; font-size: 10px; margin: 4px 0;">0%</div>
-                <button id="cancel-btn" style="width: 100%; padding: 4px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">
-                    Cancel
-                </button>
-            </div>
-            <div id="error-section" style="display: none; margin-top: 8px; color: #dc3545; font-size: 10px; text-align: center;"></div>
-        `;
+function isCoursePage() {
+  return window.location.href.includes('coursera.org/learn/');
+}
 
-        document.body.appendChild(container);
-        return container;
-    }
+// ============================================================================
+// UI CREATION
+// ============================================================================
 
-    function createConfetti() {
-        const confettiContainer = document.createElement('div');
-        confettiContainer.id = 'confetti-container';
-        confettiContainer.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            pointer-events: none;
-            z-index: 1000000;
-            overflow: hidden;
-        `;
+function createDownloadButton() {
+  if (downloadButton) return;
 
-        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd'];
+  const container = document.createElement('div');
+  container.id = 'coursera-downloader';
+  container.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 77px;
+    z-index: 999999;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+  `;
 
-        for (let i = 0; i < 100; i++) {
-            const particle = document.createElement('div');
-            particle.style.cssText = `
-                position: absolute;
-                width: 8px;
-                height: 8px;
-                background: ${colors[Math.floor(Math.random() * colors.length)]};
-                border-radius: 50%;
-                animation: confetti-fall ${2 + Math.random() * 3}s linear forwards;
-                left: ${Math.random() * 100}vw;
-                top: -20px;
-                transform: rotate(${Math.random() * 360}deg);
-            `;
-            confettiContainer.appendChild(particle);
-        }
+  container.innerHTML = `
+    <div id="download-form">
+      <select id="resolution-select">
+        <option value="720p">720p</option>
+        <option value="540p">540p</option>
+        <option value="360p">360p</option>
+      </select>
+      <label>
+        <input type="checkbox" id="force-assets" checked> Force Assets
+      </label>
+      <button id="download-btn">Download Now</button>
+    </div>
+    
+    <div id="progress-section" style="display: none;">
+      <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+        <div id="progress-text">0%</div>
+      </div>
+      <button id="cancel-btn">Cancel</button>
+    </div>
+    
+    <div id="error-section" style="display: none;">
+      <div id="error-message"></div>
+      <button id="retry-btn">Retry</button>
+    </div>
+  `;
 
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes confetti-fall {
-                to {
-                    transform: translateY(100vh) rotate(720deg);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-        document.body.appendChild(confettiContainer);
+  document.body.appendChild(container);
+  downloadButton = container;
+  setupEventListeners();
+}
 
-        setTimeout(() => {
-            confettiContainer.remove();
-            style.remove();
-        }, 5000);
-    }
+function removeDownloadButton() {
+  if (downloadButton) {
+    downloadButton.remove();
+    downloadButton = null;
+  }
+}
 
-    function showButton() {
-        if (!downloadContainer) {
-            downloadContainer = createDownloadUI();
-        }
-        downloadContainer.style.display = 'block';
-        isButtonVisible = true;
-    }
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
 
-    function hideButton() {
-        if (downloadContainer) {
-            downloadContainer.style.display = 'none';
-        }
-        isButtonVisible = false;
-    }
+function setupEventListeners() {
+  const downloadBtn = document.getElementById('download-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const retryBtn = document.getElementById('retry-btn');
 
-    function showProgress() {
-        if (!downloadContainer) return;
-        downloadContainer.querySelector('#progress-section').style.display = 'block';
-        downloadContainer.querySelector('#error-section').style.display = 'none';
-        isDownloading = true;
-    }
+  downloadBtn.addEventListener('click', startDownload);
+  cancelBtn.addEventListener('click', cancelDownload);
+  retryBtn.addEventListener('click', () => {
+    showForm();
+    startDownload();
+  });
+}
 
-    function hideProgress() {
-        if (!downloadContainer) return;
-        downloadContainer.querySelector('#progress-section').style.display = 'none';
-        isDownloading = false;
-    }
+// ============================================================================
+// DOWNLOAD FUNCTIONS
+// ============================================================================
 
-    function updateProgress(percentage) {
-        if (!downloadContainer) return;
-        const fill = downloadContainer.querySelector('#progress-fill');
-        const text = downloadContainer.querySelector('#progress-text');
-        if (fill && text) {
-            fill.style.width = `${percentage}%`;
-            text.textContent = `${percentage}%`;
-        }
-    }
+async function startDownload() {
+  const slug = extractSlugFromURL();
+  if (!slug) {
+    showError('Could not detect course from URL');
+    return;
+  }
 
-    function showError(errorMessage) {
-        if (!downloadContainer) return;
-        const errorSection = downloadContainer.querySelector('#error-section');
-        errorSection.textContent = errorMessage;
-        errorSection.style.display = 'block';
-        downloadContainer.querySelector('#progress-section').style.display = 'none';
+  const resolution = document.getElementById('resolution-select').value;
+  const forceAssets = document.getElementById('force-assets').checked;
 
-        setTimeout(() => {
-            errorSection.style.display = 'none';
-        }, 3000);
-    }
+  isDownloading = true;
+  currentSlug = slug;
+  showProgress();
 
-    function setupEventListeners() {
-        if (!downloadContainer) return;
-
-        const downloadBtn = downloadContainer.querySelector('#download-btn');
-        const cancelBtn = downloadContainer.querySelector('#cancel-btn');
-
-        downloadBtn.addEventListener('click', () => {
-            if (isDownloading) return;
-
-            const slug = extractSlug();
-            if (!slug) return;
-
-            const resolution = downloadContainer.querySelector('#resolution-select').value;
-            const forceAssets = downloadContainer.querySelector('#force-assets').checked;
-
-            chrome.runtime.sendMessage({
-                type: 'START_DOWNLOAD',
-                data: { slug, resolution, forceAssets }
-            });
-
-            showProgress();
-            updateProgress(0);
-        });
-
-        cancelBtn.addEventListener('click', () => {
-            const text = downloadContainer.querySelector('#progress-text');
-            text.textContent = 'Cancelling...';
-
-            chrome.runtime.sendMessage({
-                type: 'CANCEL_DOWNLOAD'
-            });
-        });
-    }
-
-    chrome.runtime.onMessage.addListener((message) => {
-        switch (message.type) {
-            case 'BUTTON_TOGGLED':
-                if (message.data.enabled) {
-                    showButton();
-                    setupEventListeners();
-                } else {
-                    hideButton();
-                }
-                break;
-
-            case 'DOWNLOAD_PROGRESS':
-                updateProgress(message.data.percentage);
-                break;
-
-            case 'DOWNLOAD_COMPLETE':
-                hideProgress();
-                createConfetti();
-                break;
-
-            case 'DOWNLOAD_ERROR':
-                showError(message.data.error);
-                break;
-        }
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'START_DOWNLOAD',
+      slug: slug,
+      resolution: resolution,
+      forceAssets: forceAssets
     });
 
-    function cleanup() {
-        if (downloadContainer && downloadContainer.parentNode) {
-            downloadContainer.parentNode.removeChild(downloadContainer);
+    if (!response.success) {
+      throw new Error(response.error);
+    }
+  } catch (error) {
+    showError(error.message);
+    isDownloading = false;
+  }
+}
+
+async function cancelDownload() {
+  const cancelBtn = document.getElementById('cancel-btn');
+  cancelBtn.textContent = 'Cancelling...';
+  cancelBtn.disabled = true;
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'CANCEL_DOWNLOAD'
+    });
+  } catch (error) {
+    // Silent fail
+  }
+
+  isDownloading = false;
+  showForm();
+}
+
+// ============================================================================
+// UI STATE MANAGEMENT
+// ============================================================================
+
+function showForm() {
+  document.getElementById('download-form').style.display = 'block';
+  document.getElementById('progress-section').style.display = 'none';
+  document.getElementById('error-section').style.display = 'none';
+}
+
+function showProgress() {
+  document.getElementById('download-form').style.display = 'block';
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('error-section').style.display = 'none';
+  
+  updateProgress(0);
+  
+  const cancelBtn = document.getElementById('cancel-btn');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.disabled = false;
+}
+
+function showError(message) {
+  document.getElementById('download-form').style.display = 'block';
+  document.getElementById('progress-section').style.display = 'none';
+  document.getElementById('error-section').style.display = 'block';
+  document.getElementById('error-message').textContent = message;
+  
+  setTimeout(() => {
+    if (!isDownloading) {
+      showForm();
+    }
+  }, 3000);
+}
+
+function updateProgress(percentage) {
+  const progressBar = document.getElementById('progress-bar');
+  const progressText = document.getElementById('progress-text');
+  
+  if (progressBar) {
+    progressBar.style.width = percentage + '%';
+  }
+  if (progressText) {
+    progressText.textContent = percentage + '%';
+  }
+}
+
+// ============================================================================
+// CONFETTI ANIMATION
+// ============================================================================
+
+function createConfetti() {
+  const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd'];
+  
+  for (let i = 0; i < 50; i++) {
+    const confetti = document.createElement('div');
+    confetti.style.cssText = `
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      background: ${colors[Math.floor(Math.random() * colors.length)]};
+      left: ${Math.random() * 100}vw;
+      top: -10px;
+      z-index: 1000000;
+      pointer-events: none;
+      animation: confetti-fall ${2 + Math.random() * 3}s linear forwards;
+    `;
+    
+    document.body.appendChild(confetti);
+    
+    setTimeout(() => {
+      if (confetti.parentNode) {
+        confetti.parentNode.removeChild(confetti);
+      }
+    }, 5000);
+  }
+}
+
+// ============================================================================
+// MESSAGE HANDLING
+// ============================================================================
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  switch (message.type) {
+    case 'DOWNLOAD_PROGRESS':
+      if (message.percentage !== undefined) {
+        updateProgress(message.percentage);
+      }
+      break;
+      
+    case 'DOWNLOAD_COMPLETE':
+      isDownloading = false;
+      createConfetti();
+      setTimeout(() => {
+        showForm();
+      }, 2000);
+      break;
+      
+    case 'DOWNLOAD_ERROR':
+      isDownloading = false;
+      showError(message.error || 'Download failed');
+      break;
+      
+    case 'DOWNLOAD_CANCELLED':
+      isDownloading = false;
+      showForm();
+      break;
+      
+    case 'BUTTON_TOGGLED':
+      if (message.enabled && isCoursePage()) {
+        createDownloadButton();
+      } else {
+        removeDownloadButton();
+      }
+      break;
+  }
+  
+  sendResponse({ success: true });
+});
+
+// ============================================================================
+// URL CHANGE DETECTION
+// ============================================================================
+
+let lastUrl = location.href;
+
+function checkUrlChange() {
+  const currentUrl = location.href;
+  if (currentUrl !== lastUrl) {
+    lastUrl = currentUrl;
+    
+    if (isCoursePage()) {
+      // Check if button should be shown
+      chrome.runtime.sendMessage({ type: 'GET_BUTTON_STATE' }, (response) => {
+        if (response && response.enabled) {
+          createDownloadButton();
         }
-        downloadContainer = null;
-        isButtonVisible = false;
-        isDownloading = false;
+      });
+    } else {
+      removeDownloadButton();
     }
+  }
+}
 
-    window.addEventListener('beforeunload', cleanup);
+// Monitor URL changes
+const observer = new MutationObserver(checkUrlChange);
+observer.observe(document, { subtree: true, childList: true });
+window.addEventListener('popstate', checkUrlChange);
 
-    if (window.location.pathname.includes('/learn/')) {
-        chrome.runtime.sendMessage({ type: 'CHECK_BUTTON_STATE' });
+// Override pushState and replaceState
+const originalPushState = history.pushState;
+const originalReplaceState = history.replaceState;
+
+history.pushState = function(...args) {
+  originalPushState.apply(history, args);
+  setTimeout(checkUrlChange, 100);
+};
+
+history.replaceState = function(...args) {
+  originalReplaceState.apply(history, args);
+  setTimeout(checkUrlChange, 100);
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+function init() {
+  if (!isCoursePage()) return;
+  
+  // Add confetti CSS animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes confetti-fall {
+      0% {
+        transform: translateY(-10px) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(100vh) rotate(360deg);
+        opacity: 0;
+      }
     }
-})();
+  `;
+  document.head.appendChild(style);
+  
+  // Check if button should be shown
+  chrome.runtime.sendMessage({ type: 'GET_BUTTON_STATE' }, (response) => {
+    if (response && response.enabled) {
+      createDownloadButton();
+    }
+  });
+}
+
+// Initialize when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+// ============================================================================
+// CLEANUP
+// ============================================================================
+
+window.addEventListener('beforeunload', () => {
+  if (observer) {
+    observer.disconnect();
+  }
+  removeDownloadButton();
+});
